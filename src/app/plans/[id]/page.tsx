@@ -23,7 +23,7 @@ function PlanDetailContent({ params }: PlanDetailProps) {
   const planId = resolvedParams.id;
   const plan = getReadingPlanById(planId);
 
-  const { preferences, setActivePlanId } = useApp();
+  const { preferences, setActivePlanId, progressVersion, notifyProgressChanged } = useApp();
   const [completedSet, setCompletedSet] = useState<Set<string>>(new Set());
 
   const loadProgress = async () => {
@@ -34,6 +34,12 @@ function PlanDetailContent({ params }: PlanDetailProps) {
 
   useEffect(() => {
     loadProgress();
+  }, [progressVersion]);
+
+  useEffect(() => {
+    const onFocus = () => loadProgress();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   if (!plan) {
@@ -84,6 +90,7 @@ function PlanDetailContent({ params }: PlanDetailProps) {
     } else {
       await markChapterCompleted(bookId, chapter, plan.id);
     }
+    notifyProgressChanged();
     await loadProgress();
   };
 

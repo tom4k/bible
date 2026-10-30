@@ -25,7 +25,7 @@ import { calculateJourneyProgress } from '../lib/journey/definition';
 import { JOURNEY_PACE_PRESETS, JourneyPaceConfig, JourneyProgressSummary } from '../lib/journey/types';
 
 export default function HomePage() {
-  const { preferences, isLoading: prefsLoading } = useApp();
+  const { preferences, isLoading: prefsLoading, progressVersion, notifyProgressChanged } = useApp();
   const [stats, setStats] = useState<ReadingStatsSummary | null>(null);
   const [journeySummary, setJourneySummary] = useState<JourneyProgressSummary | null>(null);
   const [latestJournal, setLatestJournal] = useState<JournalEntry | null>(null);
@@ -91,7 +91,14 @@ export default function HomePage() {
     preferences.journeyPace,
     preferences.customChaptersPerSession,
     preferences.customSessionsPerWeek,
+    progressVersion,
   ]);
+
+  useEffect(() => {
+    const onFocus = () => loadDashboardData();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
   // Determine the next chapter to recommend for active plan
   const recommendedBookId =
@@ -111,6 +118,7 @@ export default function HomePage() {
       await markChapterCompleted(recommendedBookId, recommendedChapter, preferences.activePlanId);
       setCurrentChapterIsDone(true);
     }
+    notifyProgressChanged();
     await loadDashboardData();
   };
 

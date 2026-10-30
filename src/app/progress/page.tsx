@@ -8,40 +8,70 @@ import {
   CheckCircle2,
   Bookmark,
   PenLine,
+  Compass,
+  ArrowRight,
 } from 'lucide-react';
 import { db } from '../../lib/db/dexie';
 import { useApp } from '../../context/AppContext';
 import { calculateReadingStats, ReadingStatsSummary } from '../../lib/stats/calculator';
 import { ReadingActivity } from '../../lib/db/schema';
 import { getBookById } from '../../lib/bible/catalogue';
+import { calculateJourneyProgress } from '../../lib/journey/definition';
+import { JOURNEY_PACE_PRESETS, JourneyProgressSummary } from '../../lib/journey/types';
 
 export default function ProgressPage() {
-  const { preferences } = useApp();
+  const { preferences, progressVersion } = useApp();
   const [stats, setStats] = useState<ReadingStatsSummary | null>(null);
+  const [journeySummary, setJourneySummary] = useState<JourneyProgressSummary | null>(null);
   const [recentActivities, setRecentActivities] = useState<ReadingActivity[]>([]);
 
+  const loadData = async () => {
+    const [allProgress, allActivities, totalBookmarks, totalJournals] = await Promise.all([
+      db.chapterProgress.toArray(),
+      db.readingActivity.orderBy('timestamp').reverse().toArray(),
+      db.bookmarks.count(),
+      db.journalEntries.count(),
+    ]);
+
+    const calculated = calculateReadingStats({
+      completedChapters: allProgress,
+      activities: allActivities,
+      activePlanId: preferences.activePlanId,
+      totalBookmarks,
+      totalJournalEntries: totalJournals,
+    });
+
+    const cKeys = new Set(allProgress.map((r) => `${r.bookId}:${r.chapter}`));
+    const paceCfg =
+      preferences.journeyPace === 'custom'
+        ? {
+            preset: 'custom' as const,
+            name: 'Custom Pace',
+            chaptersPerSession: preferences.customChaptersPerSession || 1,
+            sessionsPerWeek: preferences.customSessionsPerWeek || 5,
+            description: `${preferences.customChaptersPerSession} chapters, ${preferences.customSessionsPerWeek} days/week`,
+          }
+        : JOURNEY_PACE_PRESETS[preferences.journeyPace] || JOURNEY_PACE_PRESETS.gentle;
+
+    const jSummary = calculateJourneyProgress({
+      completedKeys: cKeys,
+      paceConfig: paceCfg,
+    });
+
+    setStats(calculated);
+    setJourneySummary(jSummary);
+    setRecentActivities(allActivities.slice(0, 15));
+  };
+
   useEffect(() => {
-    async function loadData() {
-      const [allProgress, allActivities, totalBookmarks, totalJournals] = await Promise.all([
-        db.chapterProgress.toArray(),
-        db.readingActivity.orderBy('timestamp').reverse().toArray(),
-        db.bookmarks.count(),
-        db.journalEntries.count(),
-      ]);
-
-      const calculated = calculateReadingStats({
-        completedChapters: allProgress,
-        activities: allActivities,
-        activePlanId: preferences.activePlanId,
-        totalBookmarks,
-        totalJournalEntries: totalJournals,
-      });
-
-      setStats(calculated);
-      setRecentActivities(allActivities.slice(0, 15));
-    }
     loadData();
-  }, [preferences.activePlanId]);
+  }, [preferences.activePlanId, preferences.journeyPace, progressVersion]);
+
+  useEffect(() => {
+    const onFocus = () => loadData();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -98,6 +128,51 @@ export default function ProgressPage() {
             {stats?.totalBookmarks ?? 0}
           </div>
           <p className="text-[11px] text-[var(--text-muted)]">Saved sacred passages</p>
+        </div>
+      </div>
+
+      {/* My Bible Journey Progress (FR-01, FR-03, FR-05) */}
+      <div className="rounded-2xl border-2 border-[var(--primary-green)]/30 dark:border-[var(--gold)]/40 bg-[var(--bg-card)] p-6 space-y-4 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--primary-green)] text-white dark:bg-[var(--gold)] dark:text-[#173B33] text-xs font-bold uppercase tracking-wider">
+                <Compass className="w-3.5 h-3.5" />
+                <span>My Bible Journey</span>
+              </span>
+              {journeySummary?.activeStage && (
+                <span className="text-xs text-[var(--text-muted)] font-medium">
+                  Stage {journeySummary.activeStage.id}: {journeySummary.activeStage.name}
+                </span>
+              )}
+            </div>
+            <h2 className="font-serif font-bold text-lg text-[var(--text-primary)]">
+              All 73 Catholic Books Pilgrimage
+            </h2>
+          </div>
+
+          <Link
+            href="/journey"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--primary-green)] dark:text-[var(--gold)] hover:underline shrink-0"
+          >
+            <span>Open Journey Dashboard</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs text-[var(--text-muted)] font-medium">
+            <span>
+              {journeySummary?.completedChapters ?? 0} of {journeySummary?.totalChapters ?? 1334} chapters completed ({journeySummary?.completedBooks ?? 0}/73 books)
+            </span>
+            <span className="font-bold text-[var(--text-primary)]">{journeySummary?.percentage ?? 0}%</span>
+          </div>
+          <div className="w-full h-3 rounded-full bg-[var(--bg-card-subtle)] overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-[var(--primary-green)] to-[var(--gold)] rounded-full transition-all duration-500"
+              style={{ width: `${journeySummary?.percentage ?? 0}%` }}
+            />
+          </div>
         </div>
       </div>
 

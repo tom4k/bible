@@ -25,6 +25,8 @@ interface AppContextType {
   ) => Promise<void>;
   setLastJourneyPosition: (bookId: string, chapter: number) => Promise<void>;
   refreshPreferences: () => Promise<void>;
+  progressVersion: number;
+  notifyProgressChanged: () => void;
   isLoading: boolean;
 }
 
@@ -44,6 +46,11 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
   const [isLoading, setIsLoading] = useState(true);
+  const [progressVersion, setProgressVersion] = useState(0);
+
+  const notifyProgressChanged = () => {
+    setProgressVersion((v) => v + 1);
+  };
 
   const loadPrefs = async () => {
     try {
@@ -159,6 +166,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setJourneyPace,
         setLastJourneyPosition,
         refreshPreferences,
+        progressVersion,
+        notifyProgressChanged,
         isLoading,
       }}
     >

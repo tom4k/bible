@@ -50,10 +50,11 @@ function JourneyReaderContent() {
   const requestedBookParam = searchParams.get('book');
   const requestedChapterParam = searchParams.get('chapter');
 
-  const { preferences, setEmbeddedReaderEnabled, setLastJourneyPosition } = useApp();
+  const { preferences, setEmbeddedReaderEnabled, setLastJourneyPosition, notifyProgressChanged } = useApp();
 
   const [completedKeys, setCompletedKeys] = useState<Set<string>>(new Set());
   const [isLoaded, setIsLoaded] = useState(false);
+  const [sessionChapters, setSessionChapters] = useState<typeof ALL_JOURNEY_CHAPTERS[number][]>([]);
   const [activeSessionIndex, setActiveSessionIndex] = useState(0);
   const [isBookmarked, setIsBookmarked] = useState(false);
 
@@ -95,11 +96,9 @@ function JourneyReaderContent() {
     return JOURNEY_PACE_PRESETS[preferences.journeyPace] || JOURNEY_PACE_PRESETS.gentle;
   }, [preferences.journeyPace, preferences.customChaptersPerSession, preferences.customSessionsPerWeek]);
 
-  // Determine reading assignment
-  const { sessionChapters, currentChapterItem } = useMemo(() => {
-    if (!isLoaded) {
-      return { sessionChapters: [], currentChapterItem: null };
-    }
+  // Initialize or update reading assignment once on load or when query params change
+  useEffect(() => {
+    if (!isLoaded) return;
 
     // If explicit query params are provided
     if (requestedBookParam && requestedChapterParam) {
@@ -110,15 +109,14 @@ function JourneyReaderContent() {
           (j) => j.bookId === matchedBook.id && j.chapter === parsedCh
         );
         if (found) {
-          return {
-            sessionChapters: [found],
-            currentChapterItem: found,
-          };
+          setSessionChapters([found]);
+          setActiveSessionIndex(0);
+          return;
         }
       }
     }
 
-    // Otherwise calculate next incomplete chapters according to journey order and pace
+    // Default daily session assignment based on current unread chapters
     const targetCount = Math.max(1, paceConfig.chaptersPerSession);
     const unread: typeof ALL_JOURNEY_CHAPTERS[number][] = [];
 
@@ -129,16 +127,16 @@ function JourneyReaderContent() {
       }
     }
 
-    // If all completed, default to the last chapter
     const session = unread.length > 0 ? unread : [ALL_JOURNEY_CHAPTERS[ALL_JOURNEY_CHAPTERS.length - 1]];
-    const safeIndex = Math.min(activeSessionIndex, session.length - 1);
-    const current = session[safeIndex] || session[0];
+    setSessionChapters(session);
+    setActiveSessionIndex(0);
+  }, [isLoaded, requestedBookParam, requestedChapterParam, paceConfig.preset, paceConfig.chaptersPerSession]);
 
-    return {
-      sessionChapters: session,
-      currentChapterItem: current,
-    };
-  }, [isLoaded, requestedBookParam, requestedChapterParam, paceConfig, completedKeys, activeSessionIndex]);
+  const currentChapterItem = useMemo(() => {
+    if (sessionChapters.length === 0) return null;
+    const safeIndex = Math.min(activeSessionIndex, sessionChapters.length - 1);
+    return sessionChapters[safeIndex] || sessionChapters[0];
+  }, [sessionChapters, activeSessionIndex]);
 
   const currentBook = useMemo(() => {
     return currentChapterItem ? getBookById(currentChapterItem.bookId) : null;
@@ -197,10 +195,14 @@ function JourneyReaderContent() {
       nextKeys.delete(key);
       setCompletedKeys(nextKeys);
       setMilestone(null);
+      notifyProgressChanged();
+      setSaveMessage(`Marked ${currentBook.name} ${currentChapterItem.chapter} incomplete`);
+      setTimeout(() => setSaveMessage(null), 3000);
     } else {
       await markChapterCompleted(currentBook.id, currentChapterItem.chapter, 'my-bible-journey');
       nextKeys.add(key);
       setCompletedKeys(nextKeys);
+      notifyProgressChanged();
 
       // Check milestones
       let bookFinished = true;

@@ -39,17 +39,26 @@ test.describe('My Bible Journey - Complete Catholic Bible Reading Flow', () => {
     await expect(focusedBtn).toHaveClass(/border-\[var\(--primary-green\)\]|border-\[var\(--gold\)\]/);
   });
 
-  test('Daily reading session loads earliest unread chapter (Mark 1), allows completion and reflection', async ({ page }) => {
+  test('Daily reading session loads chapter, allows completion without jumping, and saves reflection', async ({ page }) => {
     await page.goto('/journey/read?book=mrk&chapter=1');
     await page.waitForLoadState('domcontentloaded');
 
     // Verify Mark 1 is loaded
     await expect(page.locator('h1').first()).toContainText('Mark 1');
 
-    // Verify completion toggle button exists and can be clicked
+    // Verify completion toggle button exists
     const toggleBtn = page.locator('button:has-text("Mark Completed"), button:has-text("Chapter Completed")').first();
     await expect(toggleBtn).toBeVisible();
-    await toggleBtn.click();
+
+    // If currently not completed, click to complete
+    const isAlreadyDone = await page.locator('button:has-text("Chapter Completed")').count() > 0;
+    if (!isAlreadyDone) {
+      await page.locator('button:has-text("Mark Completed")').first().click();
+    }
+
+    // Verify the button now shows Chapter Completed and stays on Mark 1
+    await expect(page.locator('button:has-text("Chapter Completed")').first()).toBeVisible();
+    await expect(page.locator('h1').first()).toContainText('Mark 1');
 
     // Verify Add Reflection button and modal prompts
     const reflectBtn = page.locator('button:has-text("Add Reflection")').first();
@@ -72,13 +81,25 @@ test.describe('My Bible Journey - Complete Catholic Bible Reading Flow', () => {
     await expect(page.locator('text=Reflection saved to your journal')).toBeVisible();
   });
 
-  test('Homepage prominently features My Bible Journey and updates progress', async ({ page }) => {
+  test('Progress updates immediately on Dashboard and Homepage', async ({ page }) => {
+    // Visit journey dashboard
+    await page.goto('/journey');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Check that Mark is visible under Stage 1
+    await expect(page.locator('text=Mark').first()).toBeVisible();
+
+    // Click on Mark to expand its chapter checklist
+    await page.locator('button:has-text("Mark")').first().click();
+
+    // Chapter 1 pill should be visible
+    await expect(page.locator('a[title="Read Mark Chapter 1"]').first()).toBeVisible();
+
+    // Visit Homepage and verify My Bible Journey card is updated
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Homepage has prominent My Bible Journey card
     await expect(page.locator('#journey-heading').first()).toBeVisible();
     await expect(page.getByRole('link', { name: 'Continue Journey' }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Journey Dashboard' }).first()).toBeVisible();
   });
 });

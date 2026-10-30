@@ -47,7 +47,7 @@ function BibleReaderContent({ params }: ReaderProps) {
   const book = getBookBySlug(bookParam) || getBookById(bookParam);
   const valid = book && isValidChapter(book.id, chapterNum);
 
-  const { preferences, setLastRead, setEmbeddedReaderEnabled } = useApp();
+  const { preferences, setLastRead, setEmbeddedReaderEnabled, notifyProgressChanged } = useApp();
 
   const [isCompleted, setIsCompleted] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
@@ -116,6 +116,7 @@ function BibleReaderContent({ params }: ReaderProps) {
       await markChapterCompleted(book.id, chapterNum, preferences.activePlanId);
       setIsCompleted(true);
     }
+    notifyProgressChanged();
   };
 
   const toggleBookmark = async () => {

@@ -10,9 +10,11 @@ import {
   Sliders,
   Check,
   ChevronDown,
+  BookOpen,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { db } from '../../lib/db/dexie';
+import { db, markChapterCompleted, markChapterIncomplete } from '../../lib/db/dexie';
+import { getBookById } from '../../lib/bible/catalogue';
 import { calculateJourneyProgress } from '../../lib/journey/definition';
 import {
   JourneyProgressSummary,
@@ -23,17 +25,20 @@ import {
 import { SyroCrossIcon } from '../../components/icons/SyroCrossIcon';
 
 export default function JourneyDashboardPage() {
-  const { preferences, setJourneyPace } = useApp();
+  const { preferences, setJourneyPace, progressVersion, notifyProgressChanged } = useApp();
   const [journeySummary, setJourneySummary] = useState<JourneyProgressSummary | null>(null);
+  const [completedKeys, setCompletedKeys] = useState<Set<string>>(new Set());
   const [selectedPace, setSelectedPace] = useState<JourneyPacePreset>(preferences.journeyPace || 'gentle');
   const [customChapters, setCustomChapters] = useState(preferences.customChaptersPerSession || 1);
   const [customSessions, setCustomSessions] = useState(preferences.customSessionsPerWeek || 5);
   const [expandedStageId, setExpandedStageId] = useState<number | null>(null);
+  const [expandedBookId, setExpandedBookId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const loadData = async () => {
     const records = await db.chapterProgress.toArray();
-    const completedKeys = new Set(records.map((r) => `${r.bookId}:${r.chapter}`));
+    const cKeys = new Set(records.map((r) => `${r.bookId}:${r.chapter}`));
+    setCompletedKeys(cKeys);
 
     const currentPaceConfig: JourneyPaceConfig =
       selectedPace === 'custom'
@@ -41,7 +46,7 @@ export default function JourneyDashboardPage() {
         : JOURNEY_PACE_PRESETS[selectedPace];
 
     const summary = calculateJourneyProgress({
-      completedKeys,
+      completedKeys: cKeys,
       paceConfig: currentPaceConfig,
     });
 
@@ -53,7 +58,30 @@ export default function JourneyDashboardPage() {
 
   useEffect(() => {
     loadData();
-  }, [preferences.journeyPace, selectedPace, customChapters, customSessions]);
+  }, [preferences.journeyPace, selectedPace, customChapters, customSessions, progressVersion]);
+
+  useEffect(() => {
+    const onFocus = () => loadData();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [selectedPace, customChapters, customSessions]);
+
+  const handleToggleChapter = async (bookId: string, chapter: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const key = `${bookId}:${chapter}`;
+    const book = getBookById(bookId);
+    if (completedKeys.has(key)) {
+      await markChapterIncomplete(bookId, chapter);
+      setToastMessage(`Marked unread: ${book?.name || bookId} ${chapter}`);
+    } else {
+      await markChapterCompleted(bookId, chapter, 'my-bible-journey');
+      setToastMessage(`Marked completed: ${book?.name || bookId} ${chapter}`);
+    }
+    notifyProgressChanged();
+    await loadData();
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   const handlePaceChange = async (pace: JourneyPacePreset) => {
     setSelectedPace(pace);
@@ -416,40 +444,106 @@ export default function JourneyDashboardPage() {
                       {sp.stage.description}
                     </p>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
-                      {sp.books.map((b) => (
-                        <Link
-                          key={b.book.id}
-                          href={`/bible/${b.book.slug}/1`}
-                          className={`p-3 rounded-xl border flex items-center justify-between text-left transition-colors ${
-                            b.isComplete
-                              ? 'border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-200'
-                              : 'border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--primary-green)]'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-serif font-bold text-xs text-[var(--text-primary)]">
-                                {b.book.name}
-                              </span>
-                              {b.book.isDeuterocanonical && (
-                                <span className="text-[9px] text-[#795213] dark:text-[var(--gold)] font-medium">★</span>
-                              )}
-                            </div>
-                            <span className="text-[10px] text-[var(--text-muted)]">
-                              {b.completedChapters}/{b.totalChapters} chapters
-                            </span>
-                          </div>
+                    <div className="space-y-3 pt-2">
+                      {sp.books.map((b) => {
+                        const isBookExpanded = expandedBookId === b.book.id;
+                        return (
+                          <div
+                            key={b.book.id}
+                            className={`rounded-xl border transition-colors overflow-hidden ${
+                              b.isComplete
+                                ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20'
+                                : 'border-[var(--border-color)] bg-[var(--bg-primary)]'
+                            }`}
+                          >
+                            <button
+                              onClick={() => setExpandedBookId(isBookExpanded ? null : b.book.id)}
+                              className="w-full p-3.5 flex items-center justify-between text-left hover:bg-[var(--bg-card-subtle)]/40 transition-colors"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-serif font-bold text-sm text-[var(--text-primary)]">
+                                    {b.book.name}
+                                  </span>
+                                  {b.book.isDeuterocanonical && (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] uppercase tracking-wider bg-[var(--gold-subtle)] text-[#795213] dark:text-[var(--gold)] font-bold">
+                                      Deuterocanonical
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-[var(--text-muted)] block">
+                                  {b.completedChapters} of {b.totalChapters} chapters completed ({Math.round((b.completedChapters / b.totalChapters) * 100)}%)
+                                </span>
+                              </div>
 
-                          {b.isComplete ? (
-                            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                          ) : (
-                            <span className="text-[10px] text-[var(--text-muted)]">
-                              {Math.round((b.completedChapters / b.totalChapters) * 100)}%
-                            </span>
-                          )}
-                        </Link>
-                      ))}
+                              <div className="flex items-center gap-3 shrink-0">
+                                {b.isComplete ? (
+                                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-900/40 px-2.5 py-1 rounded-full">
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Complete</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-semibold text-[var(--text-muted)]">
+                                    {b.totalChapters - b.completedChapters} left
+                                  </span>
+                                )}
+                                <ChevronDown className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${isBookExpanded ? 'rotate-180' : ''}`} />
+                              </div>
+                            </button>
+
+                            {/* Expandable Chapter Checklist (FR-03, FR-05, FR-10) */}
+                            {isBookExpanded && (
+                              <div className="p-4 pt-2 border-t border-[var(--border-color)]/60 bg-[var(--bg-card)] space-y-3 animate-fade-in">
+                                <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
+                                  <span>Tap a chapter number to read, or tap the check circle to toggle completion:</span>
+                                  <Link
+                                    href={`/journey/read?book=${b.book.id}&chapter=1`}
+                                    className="inline-flex items-center gap-1 text-[var(--primary-green)] dark:text-[var(--gold)] font-semibold hover:underline"
+                                  >
+                                    <BookOpen className="w-3.5 h-3.5" />
+                                    <span>Read Book</span>
+                                  </Link>
+                                </div>
+
+                                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
+                                  {Array.from({ length: b.totalChapters }, (_, i) => i + 1).map((ch) => {
+                                    const isDone = completedKeys.has(`${b.book.id}:${ch}`);
+                                    return (
+                                      <div
+                                        key={ch}
+                                        className={`group relative rounded-lg border text-center transition-all flex flex-col items-center justify-center p-1.5 ${
+                                          isDone
+                                            ? 'border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200'
+                                            : 'border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--primary-green)] text-[var(--text-primary)]'
+                                        }`}
+                                      >
+                                        <Link
+                                          href={`/journey/read?book=${b.book.id}&chapter=${ch}`}
+                                          className="text-xs font-bold w-full py-0.5 hover:underline"
+                                          title={`Read ${b.book.name} Chapter ${ch}`}
+                                        >
+                                          {ch}
+                                        </Link>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => handleToggleChapter(b.book.id, ch, e)}
+                                          className="mt-0.5 p-0.5 text-[var(--text-muted)] hover:text-emerald-600 transition-colors"
+                                          title={isDone ? `Mark ${b.book.name} ${ch} incomplete` : `Mark ${b.book.name} ${ch} completed`}
+                                          aria-label={`Toggle completion for ${b.book.name} Chapter ${ch}`}
+                                        >
+                                          <CheckCircle2
+                                            className={`w-3.5 h-3.5 ${isDone ? 'text-emerald-600 dark:text-emerald-400 fill-emerald-100 dark:fill-emerald-950' : 'text-stone-300 dark:text-stone-600'}`}
+                                          />
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
