@@ -1,26 +1,79 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg-primary: #F8F6F1;
+    --bg-card: #FFFFFF;
+    --bg-card-subtle: #F1EDE4;
+    --text-primary: #252B29;
+    --text-muted: #527368;
+    --border-color: #E2DBD0;
+    --primary-green: #173B33;
+    --primary-green-hover: #1F4D43;
+    --sage: #527368;
+    --gold: #C29649;
+    --gold-subtle: #F7EECD;
+    --accent-red: #A3483E;
+  }
+
+  [data-theme="sepia"] {
+    --bg-primary: #F3EBDD;
+    --bg-card: #FAF4E9;
+    --bg-card-subtle: #E9DECA;
+    --text-primary: #382A1E;
+    --text-muted: #735A47;
+    --border-color: #DECDB3;
+    --primary-green: #3A4D39;
+    --primary-green-hover: #4C644B;
+    --sage: #6B7B6A;
+    --gold: #A6732E;
+    --gold-subtle: #F0E3CA;
+    --accent-red: #943A30;
+  }
+
+  [data-theme="dark"] {
+    --bg-primary: #0D1614;
+    --bg-card: #15221F;
+    --bg-card-subtle: #1C2D29;
+    --text-primary: #EDF3F0;
+    --text-muted: #8FAEA4;
+    --border-color: #273D38;
+    --primary-green: #235449;
+    --primary-green-hover: #2C685B;
+    --sage: #759B8E;
+    --gold: #E5BE73;
+    --gold-subtle: #312B1B;
+    --accent-red: #D4695D;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  min-height: 100vh;
+  transition: background-color 0.25s ease, color 0.25s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sage);
+}
+
+/* Focus styles for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }

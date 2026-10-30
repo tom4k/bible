@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# private user backups and test reports
+*-backup*.json
+*.backup.json
+playwright-report/
+test-results/
+
