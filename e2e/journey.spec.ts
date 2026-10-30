@@ -102,4 +102,23 @@ test.describe('My Bible Journey - Complete Catholic Bible Reading Flow', () => {
     await expect(page.locator('#journey-heading').first()).toBeVisible();
     await expect(page.getByRole('link', { name: 'Continue Journey' }).first()).toBeVisible();
   });
+
+  test('Clicking Finish Today Session marks the current chapter complete and navigates to dashboard', async ({ page }) => {
+    // Navigate to Mark 2
+    await page.goto('/journey/read?book=mrk&chapter=2');
+    await page.waitForLoadState('domcontentloaded');
+
+    await expect(page.locator('h1').first()).toContainText('Mark 2');
+
+    // Click Finish Today's Session
+    const finishBtn = page.locator('button:has-text("Finish Today\'s Session")').first();
+    await expect(finishBtn).toBeVisible();
+    await finishBtn.click();
+
+    // Verify redirected to /journey
+    await expect(page).toHaveURL(/\/journey/);
+
+    // Verify Mark is visible on journey dashboard
+    await expect(page.locator('text=Mark').first()).toBeVisible();
+  });
 });

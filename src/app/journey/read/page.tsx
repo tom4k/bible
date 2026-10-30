@@ -260,6 +260,14 @@ function JourneyReaderContent() {
     }
   };
 
+  const handleFinishSession = async () => {
+    if (currentBook && currentChapterItem && !isCurrentCompleted) {
+      await markChapterCompleted(currentBook.id, currentChapterItem.chapter, 'my-bible-journey');
+      notifyProgressChanged();
+    }
+    router.push('/journey');
+  };
+
   const handleToggleBookmark = async () => {
     const existing = await db.bookmarks
       .where('bookId')
@@ -636,7 +644,14 @@ function JourneyReaderContent() {
             {/* If in multi-chapter session and on chapter 1 of 2 */}
             {sessionChapters.length > 1 && activeSessionIndex < sessionChapters.length - 1 ? (
               <button
-                onClick={() => setActiveSessionIndex(activeSessionIndex + 1)}
+                onClick={async () => {
+                  if (!isCurrentCompleted && currentBook && currentChapterItem) {
+                    await markChapterCompleted(currentBook.id, currentChapterItem.chapter, 'my-bible-journey');
+                    setCompletedKeys((prev) => new Set(prev).add(`${currentBook.id}:${currentChapterItem.chapter}`));
+                    notifyProgressChanged();
+                  }
+                  setActiveSessionIndex(activeSessionIndex + 1);
+                }}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--primary-green)] text-white dark:bg-[var(--gold)] dark:text-[#173B33] text-xs font-semibold shadow-xs"
               >
                 <span>Continue to Next Chapter ({sessionChapters[activeSessionIndex + 1]?.chapter})</span>
@@ -644,7 +659,11 @@ function JourneyReaderContent() {
               </button>
             ) : nextChapter ? (
               <button
-                onClick={() => {
+                onClick={async () => {
+                  if (!isCurrentCompleted && currentBook && currentChapterItem) {
+                    await markChapterCompleted(currentBook.id, currentChapterItem.chapter, 'my-bible-journey');
+                    notifyProgressChanged();
+                  }
                   router.push(`/journey/read?book=${nextChapter.bookId}&chapter=${nextChapter.chapter}`);
                 }}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card-subtle)] text-xs font-medium text-[var(--text-primary)] hover:border-[var(--primary-green)]"
@@ -654,13 +673,13 @@ function JourneyReaderContent() {
               </button>
             ) : null}
 
-            <Link
-              href="/journey"
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--gold)] text-[#173B33] dark:bg-[var(--gold)] dark:text-[#173B33] text-xs font-bold shadow-xs hover:opacity-90"
+            <button
+              onClick={handleFinishSession}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--gold)] text-[#173B33] dark:bg-[var(--gold)] dark:text-[#173B33] text-xs font-bold shadow-xs hover:opacity-90 transition-transform active:scale-95"
             >
               <Check className="w-4 h-4" />
               <span>Finish Today&apos;s Session</span>
-            </Link>
+            </button>
           </div>
         </div>
 
