@@ -53,6 +53,9 @@ export const UserPreferencesSchema = z.object({
   fontSize: z.enum(['small', 'medium', 'large']),
   lastReadBookId: z.string(),
   lastReadChapter: z.number().int().positive(),
+  notificationsEnabled: z.boolean().default(false),
+  reminderTime: z.string().default('07:00'),
+  lastReminderSentDate: z.string().optional(), // YYYY-MM-DD
   updatedAt: z.string(),
 });
 export type UserPreferences = z.infer<typeof UserPreferencesSchema>;

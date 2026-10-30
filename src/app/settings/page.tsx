@@ -9,6 +9,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
+  Bell,
+  BellRing,
+  Clock,
+  Sparkles,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {
@@ -17,6 +21,11 @@ import {
   restoreBackup,
   BackupPreview,
 } from '../../lib/backup/backupService';
+import {
+  sendTestReminder,
+  isNotificationSupported,
+  getNotificationPermission,
+} from '../../lib/notifications/notificationService';
 import { BackupData } from '../../lib/db/schema';
 import { db } from '../../lib/db/dexie';
 import { SyroCrossIcon } from '../../components/icons/SyroCrossIcon';
@@ -26,8 +35,14 @@ export default function SettingsPage() {
     preferences,
     setTheme,
     setEmbeddedReaderEnabled,
+    setNotificationsEnabled,
+    setReminderTime,
     refreshPreferences,
   } = useApp();
+
+  // Notification State
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
+  const [isTestingNotification, setIsTestingNotification] = useState(false);
 
   // Export State
   const [encryptExport, setEncryptExport] = useState(false);
@@ -144,6 +159,53 @@ export default function SettingsPage() {
     setImportSuccess('All local data has been reset.');
   };
 
+  const handleToggleNotifications = async () => {
+    try {
+      setNotificationMsg(null);
+      if (!preferences.notificationsEnabled) {
+        if (!isNotificationSupported()) {
+          setNotificationMsg('Notifications are not supported in this browser.');
+          return;
+        }
+        const granted = await setNotificationsEnabled(true);
+        if (!granted) {
+          setNotificationMsg('Notification permission was not granted by your browser.');
+        } else {
+          setNotificationMsg('Daily reminders enabled! Choose your preferred time below.');
+        }
+      } else {
+        await setNotificationsEnabled(false);
+        setNotificationMsg('Daily reminders disabled.');
+      }
+    } catch (err) {
+      setNotificationMsg(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      setIsTestingNotification(true);
+      setNotificationMsg(null);
+      if (getNotificationPermission() !== 'granted') {
+        const granted = await setNotificationsEnabled(true);
+        if (!granted) {
+          setNotificationMsg('Please allow notification permissions in your browser to receive reminders.');
+          return;
+        }
+      }
+      const sent = await sendTestReminder();
+      if (sent) {
+        setNotificationMsg('Test notification sent! Check your device notification center.');
+      } else {
+        setNotificationMsg('Could not send notification. Please check browser notification settings.');
+      }
+    } catch (err) {
+      setNotificationMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsTestingNotification(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fade-in max-w-3xl mx-auto">
       <div className="space-y-1">
@@ -227,6 +289,75 @@ export default function SettingsPage() {
             {preferences.embeddedReaderEnabled ? 'Embedded Iframe Enabled' : 'Direct Link Fallback (Recommended)'}
           </span>
         </div>
+      </section>
+
+      {/* Daily Scripture Reminders */}
+      <section aria-labelledby="notifications-heading" className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] p-6 space-y-4 shadow-xs">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Bell className="w-5 h-5 text-[var(--primary-green)] dark:text-[var(--gold)]" />
+              <h2 id="notifications-heading" className="font-serif font-bold text-lg text-[var(--text-primary)]">
+                Daily Scripture Reminders
+              </h2>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+              Cultivate a consistent, peaceful habit. Receive a quiet daily reminder to read and contemplate Catholic Scripture.
+            </p>
+          </div>
+
+          <button
+            onClick={handleToggleNotifications}
+            className={`w-12 h-6 rounded-full transition-colors relative shrink-0 p-0.5 ${
+              preferences.notificationsEnabled ? 'bg-[var(--primary-green)] dark:bg-[var(--gold)]' : 'bg-stone-300 dark:bg-stone-700'
+            }`}
+            aria-label="Toggle daily Scripture reminders"
+          >
+            <div
+              className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                preferences.notificationsEnabled ? 'translate-x-6' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        {preferences.notificationsEnabled && (
+          <div className="pt-3 border-t border-[var(--border-color)]/60 space-y-4 animate-scale-up">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <label className="text-xs font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[var(--text-muted)]" />
+                <span>Preferred Reminder Time:</span>
+              </label>
+              <input
+                type="time"
+                value={preferences.reminderTime || '07:00'}
+                onChange={(e) => setReminderTime(e.target.value)}
+                className="p-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] text-sm font-semibold text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--gold)]"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--border-color)]/40">
+              <span className="text-[11px] text-[var(--text-muted)]">
+                Browser Permission: <strong className="text-[var(--text-primary)] capitalize">{getNotificationPermission()}</strong>
+              </span>
+
+              <button
+                onClick={handleTestNotification}
+                disabled={isTestingNotification}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[var(--border-color)] hover:border-[var(--primary-green)] text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-card-subtle)] transition-colors"
+              >
+                <BellRing className="w-3.5 h-3.5 text-[var(--gold)]" />
+                <span>{isTestingNotification ? 'Sending...' : 'Send Test Reminder'}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {notificationMsg && (
+          <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium pt-1">
+            {notificationMsg}
+          </p>
+        )}
       </section>
 
       {/* Backup and Restore (Section 14 & 7) */}

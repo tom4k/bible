@@ -3,6 +3,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { UserPreferences } from '../lib/db/schema';
 import { getPreferences, updatePreferences, DEFAULT_PREFERENCES } from '../lib/db/dexie';
+import {
+  requestNotificationPermission,
+  checkDailyReminder,
+  isNotificationSupported,
+} from '../lib/notifications/notificationService';
 
 interface AppContextType {
   preferences: UserPreferences;
@@ -11,6 +16,8 @@ interface AppContextType {
   setActivePlanId: (planId: string) => Promise<void>;
   setFontSize: (size: 'small' | 'medium' | 'large') => Promise<void>;
   setLastRead: (bookId: string, chapter: number) => Promise<void>;
+  setNotificationsEnabled: (enabled: boolean) => Promise<boolean>;
+  setReminderTime: (time: string) => Promise<void>;
   refreshPreferences: () => Promise<void>;
   isLoading: boolean;
 }
@@ -48,6 +55,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadPrefs();
   }, []);
 
+  // Check reminders on load and periodically
+  useEffect(() => {
+    if (!isLoading && preferences.notificationsEnabled) {
+      checkDailyReminder();
+      const interval = setInterval(() => {
+        checkDailyReminder();
+      }, 60000); // Check every minute
+      return () => clearInterval(interval);
+    }
+  }, [isLoading, preferences.notificationsEnabled, preferences.reminderTime]);
+
   const setTheme = async (theme: 'light' | 'dark' | 'sepia') => {
     applyThemeToDOM(theme);
     const updated = await updatePreferences({ theme });
@@ -77,6 +95,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPreferences(updated);
   };
 
+  const setNotificationsEnabled = async (enabled: boolean): Promise<boolean> => {
+    if (enabled) {
+      if (!isNotificationSupported()) {
+        throw new Error('Notifications are not supported in this browser.');
+      }
+      const perm = await requestNotificationPermission();
+      if (perm !== 'granted') {
+        return false;
+      }
+    }
+    const updated = await updatePreferences({ notificationsEnabled: enabled });
+    setPreferences(updated);
+    return true;
+  };
+
+  const setReminderTime = async (time: string) => {
+    const updated = await updatePreferences({ reminderTime: time });
+    setPreferences(updated);
+  };
+
   const refreshPreferences = async () => {
     await loadPrefs();
   };
@@ -90,6 +128,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setActivePlanId,
         setFontSize,
         setLastRead,
+        setNotificationsEnabled,
+        setReminderTime,
         refreshPreferences,
         isLoading,
       }}

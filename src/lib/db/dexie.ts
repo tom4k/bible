@@ -44,6 +44,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   fontSize: 'medium',
   lastReadBookId: 'mrk',
   lastReadChapter: 1,
+  notificationsEnabled: false,
+  reminderTime: '07:00',
   updatedAt: new Date().toISOString(),
 };
 
