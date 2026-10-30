@@ -56,6 +56,11 @@ export const UserPreferencesSchema = z.object({
   notificationsEnabled: z.boolean().default(false),
   reminderTime: z.string().default('07:00'),
   lastReminderSentDate: z.string().optional(), // YYYY-MM-DD
+  journeyPace: z.enum(['gentle', 'steady', 'focused', 'custom']).default('gentle'),
+  customChaptersPerSession: z.number().int().min(1).max(10).default(1),
+  customSessionsPerWeek: z.number().int().min(1).max(7).default(5),
+  lastJourneyBookId: z.string().optional(),
+  lastJourneyChapter: z.number().int().positive().optional(),
   updatedAt: z.string(),
 });
 export type UserPreferences = z.infer<typeof UserPreferencesSchema>;

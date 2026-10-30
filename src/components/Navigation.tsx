@@ -11,6 +11,7 @@ import {
   LineChart,
   Settings,
   Home,
+  Compass,
 } from 'lucide-react';
 import { SyroCrossIcon } from './icons/SyroCrossIcon';
 
@@ -19,6 +20,7 @@ export function Navigation() {
 
   const navLinks = [
     { href: '/', label: 'Home', icon: Home },
+    { href: '/journey', label: 'Journey', icon: Compass },
     { href: '/bible', label: 'Bible', icon: BookOpen },
     { href: '/plans', label: 'Plans', icon: CalendarDays },
     { href: '/journal', label: 'Journal', icon: BookMarked },
@@ -112,6 +114,7 @@ export function Navigation() {
       >
         {[
           { href: '/', label: 'Home', icon: Home },
+          { href: '/journey', label: 'Journey', icon: Compass },
           { href: '/bible', label: 'Bible', icon: BookOpen },
           { href: '/plans', label: 'Plans', icon: CalendarDays },
           { href: '/journal', label: 'Journal', icon: BookMarked },

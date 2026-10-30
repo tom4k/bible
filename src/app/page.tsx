@@ -12,6 +12,7 @@ import {
   Bookmark as BookmarkIcon,
   Sparkles,
   ArrowRight,
+  Compass,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { db, isChapterCompleted, markChapterCompleted, markChapterIncomplete } from '../lib/db/dexie';
@@ -20,10 +21,13 @@ import { getReadingPlanById } from '../lib/plans/readingPlans';
 import { calculateReadingStats, ReadingStatsSummary } from '../lib/stats/calculator';
 import { JournalEntry } from '../lib/db/schema';
 import { SyroCrossIcon } from '../components/icons/SyroCrossIcon';
+import { calculateJourneyProgress } from '../lib/journey/definition';
+import { JOURNEY_PACE_PRESETS, JourneyPaceConfig, JourneyProgressSummary } from '../lib/journey/types';
 
 export default function HomePage() {
   const { preferences, isLoading: prefsLoading } = useApp();
   const [stats, setStats] = useState<ReadingStatsSummary | null>(null);
+  const [journeySummary, setJourneySummary] = useState<JourneyProgressSummary | null>(null);
   const [latestJournal, setLatestJournal] = useState<JournalEntry | null>(null);
   const [currentChapterIsDone, setCurrentChapterIsDone] = useState(false);
 
@@ -49,6 +53,22 @@ export default function HomePage() {
       setStats(calculatedStats);
       setLatestJournal(allJournals.length > 0 ? allJournals[0] : null);
 
+      // Calculate journey progress (FR-01, FR-05, FR-10)
+      const completedKeys = new Set(allProgress.map((p) => `${p.bookId}:${p.chapter}`));
+      const paceCfg: JourneyPaceConfig =
+        preferences.journeyPace === 'custom'
+          ? {
+              preset: 'custom',
+              name: 'Custom Pace',
+              chaptersPerSession: preferences.customChaptersPerSession || 1,
+              sessionsPerWeek: preferences.customSessionsPerWeek || 5,
+              description: `${preferences.customChaptersPerSession} ch/session, ${preferences.customSessionsPerWeek} days/wk`,
+            }
+          : JOURNEY_PACE_PRESETS[preferences.journeyPace] || JOURNEY_PACE_PRESETS.gentle;
+
+      const jSummary = calculateJourneyProgress({ completedKeys, paceConfig: paceCfg });
+      setJourneySummary(jSummary);
+
       // Check if current recommended chapter is completed
       const targetBookId = preferences.lastReadBookId || 'mrk';
       const targetChapter = preferences.lastReadChapter || 1;
@@ -63,14 +83,25 @@ export default function HomePage() {
     if (!prefsLoading) {
       loadDashboardData();
     }
-  }, [prefsLoading, preferences.activePlanId, preferences.lastReadBookId, preferences.lastReadChapter]);
+  }, [
+    prefsLoading,
+    preferences.activePlanId,
+    preferences.lastReadBookId,
+    preferences.lastReadChapter,
+    preferences.journeyPace,
+    preferences.customChaptersPerSession,
+    preferences.customSessionsPerWeek,
+  ]);
 
-  // Determine the next chapter to recommend
+  // Determine the next chapter to recommend for active plan
   const recommendedBookId =
     stats?.activePlanProgress.nextChapter?.bookId || preferences.lastReadBookId || 'mrk';
   const recommendedChapter =
     stats?.activePlanProgress.nextChapter?.chapter || preferences.lastReadChapter || 1;
   const recommendedBook = getBookById(recommendedBookId);
+
+  // Next Journey chapter (FR-01, FR-04, FR-10)
+  const nextJourneyItem = journeySummary?.nextSessionChapters[0];
 
   const toggleChapterCompletion = async () => {
     if (currentChapterIsDone) {
@@ -104,6 +135,101 @@ export default function HomePage() {
               — Psalm 119:105 (NRSV-CE)
             </span>
           </p>
+        </div>
+      </section>
+
+      {/* Prominent My Bible Journey Flagship Card (FR-10) */}
+      <section aria-labelledby="journey-heading">
+        <div className="rounded-2xl border-2 border-[var(--primary-green)]/30 dark:border-[var(--gold)]/40 bg-gradient-to-br from-[var(--bg-card)] via-[var(--bg-card)] to-[var(--gold-subtle)]/20 p-6 sm:p-7 shadow-md relative overflow-hidden">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-3 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--primary-green)] text-white dark:bg-[var(--gold)] dark:text-[#173B33] text-xs font-bold uppercase tracking-wider shadow-xs">
+                  <Compass className="w-3.5 h-3.5" />
+                  <span>My Bible Journey</span>
+                </span>
+                {journeySummary?.activeStage && (
+                  <span className="px-3 py-1 rounded-full border border-[var(--border-color)] bg-[var(--bg-card)] text-xs font-medium text-[var(--text-muted)]">
+                    Stage {journeySummary.activeStage.id}: {journeySummary.activeStage.name}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <h2
+                  id="journey-heading"
+                  className="text-2xl sm:text-3xl font-serif font-bold text-[var(--primary-green)] dark:text-[var(--gold)]"
+                >
+                  {nextJourneyItem
+                    ? `Next: ${nextJourneyItem.book.name} Chapter ${nextJourneyItem.chapter}`
+                    : 'All 73 Catholic Books Completed!'}
+                </h2>
+                <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1">
+                  Sequential 6-stage journey through all 73 Catholic books (1,334 chapters). Starts at Mark 1.
+                </p>
+              </div>
+
+              {/* Progress metrics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-2.5">
+                  <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">Completion</span>
+                  <div className="text-lg font-bold font-serif text-[var(--primary-green)] dark:text-[var(--gold)]">
+                    {journeySummary?.percentage ?? 0}%
+                  </div>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-2.5">
+                  <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">Chapters</span>
+                  <div className="text-lg font-bold font-serif text-[var(--text-primary)]">
+                    {journeySummary?.completedChapters ?? 0} <span className="text-xs text-[var(--text-muted)] font-sans">/ 1,334</span>
+                  </div>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-2.5">
+                  <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">Books</span>
+                  <div className="text-lg font-bold font-serif text-[var(--text-primary)]">
+                    {journeySummary?.completedBooks ?? 0} <span className="text-xs text-[var(--text-muted)] font-sans">/ 73</span>
+                  </div>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-2.5">
+                  <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">Est. Duration</span>
+                  <div className="text-lg font-bold font-serif text-[var(--text-primary)]">
+                    ~{journeySummary?.estimatedWeeksRemaining ?? 0} <span className="text-xs text-[var(--text-muted)] font-sans">wks</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="space-y-1.5 pt-1">
+                <div className="w-full h-2.5 rounded-full bg-[var(--bg-card-subtle)] overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-[var(--primary-green)] to-[var(--gold)] rounded-full transition-all duration-500"
+                    style={{ width: `${journeySummary?.percentage ?? 0}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[11px] text-[var(--text-muted)]">
+                  <span>Pace: {journeySummary?.paceConfig.name}</span>
+                  <span>{journeySummary?.totalChapters ? `${journeySummary.totalChapters - journeySummary.completedChapters} chapters remaining` : ''}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 shrink-0 justify-center">
+              <Link
+                href="/journey/read"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-[var(--primary-green)] text-white hover:bg-[var(--primary-green-hover)] dark:bg-[var(--gold)] dark:text-[#173B33] text-sm font-bold shadow-sm transition-transform active:scale-95"
+              >
+                <Compass className="w-4 h-4" />
+                <span>Continue Journey</span>
+              </Link>
+              <Link
+                href="/journey"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] hover:border-[var(--primary-green)] text-xs font-semibold text-[var(--text-primary)] transition-colors"
+              >
+                <span>Journey Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 

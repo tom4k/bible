@@ -18,6 +18,12 @@ interface AppContextType {
   setLastRead: (bookId: string, chapter: number) => Promise<void>;
   setNotificationsEnabled: (enabled: boolean) => Promise<boolean>;
   setReminderTime: (time: string) => Promise<void>;
+  setJourneyPace: (
+    pace: 'gentle' | 'steady' | 'focused' | 'custom',
+    customChapters?: number,
+    customSessions?: number
+  ) => Promise<void>;
+  setLastJourneyPosition: (bookId: string, chapter: number) => Promise<void>;
   refreshPreferences: () => Promise<void>;
   isLoading: boolean;
 }
@@ -115,6 +121,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPreferences(updated);
   };
 
+  const setJourneyPace = async (
+    pace: 'gentle' | 'steady' | 'focused' | 'custom',
+    customChapters?: number,
+    customSessions?: number
+  ) => {
+    const updates: Partial<UserPreferences> = { journeyPace: pace };
+    if (customChapters !== undefined) updates.customChaptersPerSession = customChapters;
+    if (customSessions !== undefined) updates.customSessionsPerWeek = customSessions;
+    const updated = await updatePreferences(updates);
+    setPreferences(updated);
+  };
+
+  const setLastJourneyPosition = async (bookId: string, chapter: number) => {
+    const updated = await updatePreferences({
+      lastJourneyBookId: bookId,
+      lastJourneyChapter: chapter,
+    });
+    setPreferences(updated);
+  };
+
   const refreshPreferences = async () => {
     await loadPrefs();
   };
@@ -130,6 +156,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLastRead,
         setNotificationsEnabled,
         setReminderTime,
+        setJourneyPace,
+        setLastJourneyPosition,
         refreshPreferences,
         isLoading,
       }}

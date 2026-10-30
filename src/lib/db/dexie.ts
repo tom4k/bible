@@ -46,6 +46,11 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   lastReadChapter: 1,
   notificationsEnabled: false,
   reminderTime: '07:00',
+  journeyPace: 'gentle',
+  customChaptersPerSession: 1,
+  customSessionsPerWeek: 5,
+  lastJourneyBookId: 'mrk',
+  lastJourneyChapter: 1,
   updatedAt: new Date().toISOString(),
 };
 
